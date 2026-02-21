@@ -79,9 +79,11 @@ metadata:
     iam.gke.io/gcp-service-account: ""
 ---
 # ConfigMap for model configuration
+# NOTE: Update model_uri with your actual bucket path after running the pipeline
+# Format: gs://${PROJECT_ID}-mlops-lab/models/model.joblib
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: model-config
 data:
-  model_uri: ""
+  model_uri: "gs://PROJECT_ID-mlops-lab/models/model.joblib"
