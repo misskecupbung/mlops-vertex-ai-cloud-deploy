@@ -44,8 +44,12 @@ def data_preparation(
         'target_names': list(iris.target_names)
     }
     
-    # Ensure parent directory exists
-    os.makedirs(os.path.dirname(data_artifact.path), exist_ok=True)
+    # Ensure parent directory exists (handle empty dirname)
+    artifact_dir = os.path.dirname(data_artifact.path)
+    if artifact_dir:
+        os.makedirs(artifact_dir, exist_ok=True)
+    
+    print(f"Saving data artifact to: {data_artifact.path}")
     
     # Save to artifact
     with open(data_artifact.path, 'w') as f:
@@ -57,7 +61,13 @@ def data_preparation(
             'info': data_info
         }, f)
     
-    print(f"Data artifact saved to: {data_artifact.path}")
+    # Verify file was written
+    if os.path.exists(data_artifact.path):
+        print(f"Data artifact successfully saved to: {data_artifact.path}")
+        print(f"File size: {os.path.getsize(data_artifact.path)} bytes")
+    else:
+        raise RuntimeError(f"Failed to save data artifact to: {data_artifact.path}")
+    
     print(f"Data prepared: {data_info}")
 
 
@@ -75,12 +85,34 @@ def model_training(
     """Train the Random Forest classifier."""
     import json
     import os
+    import time
     import joblib
     import numpy as np
     from sklearn.ensemble import RandomForestClassifier
     
     print(f"Loading training data from: {data_artifact.path}")
-    print(f"File exists: {os.path.exists(data_artifact.path)}")
+    print(f"Data artifact URI: {data_artifact.uri}")
+    
+    # Wait a moment for GCS FUSE to sync (helps with eventual consistency)
+    time.sleep(2)
+    
+    # Check if file exists with retries
+    max_retries = 3
+    for attempt in range(max_retries):
+        if os.path.exists(data_artifact.path):
+            print(f"File found on attempt {attempt + 1}")
+            break
+        print(f"File not found, attempt {attempt + 1}/{max_retries}, waiting...")
+        time.sleep(5)
+    
+    if not os.path.exists(data_artifact.path):
+        # List directory contents for debugging
+        parent_dir = os.path.dirname(data_artifact.path)
+        if os.path.exists(parent_dir):
+            print(f"Contents of {parent_dir}: {os.listdir(parent_dir)}")
+        else:
+            print(f"Parent directory does not exist: {parent_dir}")
+        raise FileNotFoundError(f"Data artifact not found at: {data_artifact.path}")
     
     with open(data_artifact.path, 'r') as f:
         data = json.load(f)
@@ -88,7 +120,9 @@ def model_training(
     X_train = np.array(data['X_train'])
     y_train = np.array(data['y_train'])
     
+    print(f"Training data loaded: {len(X_train)} samples")
     print(f"Training model with {n_estimators} estimators...")
+    
     model = RandomForestClassifier(
         n_estimators=n_estimators,
         max_depth=5,
@@ -98,7 +132,9 @@ def model_training(
     model.fit(X_train, y_train)
     
     # Ensure parent directory exists
-    os.makedirs(os.path.dirname(model_artifact.path), exist_ok=True)
+    artifact_dir = os.path.dirname(model_artifact.path)
+    if artifact_dir:
+        os.makedirs(artifact_dir, exist_ok=True)
     
     # Save model
     model_artifact.metadata['framework'] = 'sklearn'

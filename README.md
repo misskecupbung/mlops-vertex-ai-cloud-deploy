@@ -181,9 +181,6 @@ This generates `pipeline.json` - the compiled pipeline specification.
 ### Step 2.3: Submit Pipeline to Vertex AI
 
 ```bash
-# Authenticate (required in Cloud Shell)
-gcloud auth application-default login
-
 # Run the pipeline submission script
 python src/submit_pipeline.py
 ```
