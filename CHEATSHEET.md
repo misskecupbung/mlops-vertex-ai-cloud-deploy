@@ -45,6 +45,9 @@ pip install -r requirements.txt
 # Compile pipeline
 python src/compile_pipeline.py
 
+# Authenticate (required in Cloud Shell)
+gcloud auth application-default login
+
 # Submit pipeline
 python src/submit_pipeline.py
 ```
