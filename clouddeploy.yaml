@@ -1,0 +1,56 @@
+# Cloud Deploy Configuration
+# Defines the delivery pipeline and target environments
+# Uses a single GKE cluster with namespaces for staging and production
+
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: mlops-model-pipeline
+description: "MLOps model deployment pipeline for Iris classifier"
+serialPipeline:
+  stages:
+    - targetId: staging
+      profiles: [staging]
+      strategy:
+        standard:
+          verify: false
+    - targetId: production
+      profiles: [production]
+      strategy:
+        standard:
+          verify: false
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+  name: staging
+description: "Staging environment for model testing (namespace: staging)"
+gke:
+  cluster: projects/${PROJECT_ID}/locations/${REGION}/clusters/mlops-cluster
+  internalIp: false
+executionConfigs:
+  - usages:
+      - RENDER
+      - DEPLOY
+    defaultPool:
+      serviceAccount: ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com
+deployParameters:
+  deploy-namespace: staging
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+  name: production
+description: "Production environment for live model serving (namespace: production)"
+requireApproval: true
+gke:
+  cluster: projects/${PROJECT_ID}/locations/${REGION}/clusters/mlops-cluster
+  internalIp: false
+executionConfigs:
+  - usages:
+      - RENDER
+      - DEPLOY
+    defaultPool:
+      serviceAccount: ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com
+deployParameters:
+  deploy-namespace: production

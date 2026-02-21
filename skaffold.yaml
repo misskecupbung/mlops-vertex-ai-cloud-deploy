@@ -1,0 +1,41 @@
+# Skaffold Configuration for Cloud Deploy
+# Defines how to render Kubernetes manifests
+# Uses namespace-based deployment for staging and production
+
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: mlops-model-serving
+build:
+  artifacts:
+    - image: serving-image
+      docker:
+        dockerfile: Dockerfile.serving
+manifests:
+  rawYaml:
+    - k8s-manifests/*.yaml
+deploy:
+  kubectl: {}
+profiles:
+  - name: staging
+    manifests:
+      rawYaml:
+        - k8s-manifests/*.yaml
+    deploy:
+      kubectl:
+        defaultNamespace: staging
+    patches:
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - name: production
+    manifests:
+      rawYaml:
+        - k8s-manifests/*.yaml
+    deploy:
+      kubectl:
+        defaultNamespace: production
+    patches:
+      - op: replace
+        path: /spec/replicas
+        value: 2
