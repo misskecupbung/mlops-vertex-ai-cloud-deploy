@@ -285,7 +285,7 @@ def iris_training_pipeline(
         data_artifact=data_prep_task.outputs['data_artifact'],
         model_display_name=model_display_name,
         serving_container_image=serving_container_image,
-        model_passed_evaluation=evaluation_task.output
+        model_passed_evaluation=evaluation_task.outputs['Output']
     )
 
 
