@@ -234,9 +234,9 @@ gcloud deploy apply \
   --region=${REGION}
 ```
 
-### Step 3.5: Prepare Namespaces for Model Deployment
+### Step 3.4: Prepare Namespaces for Model Deployment
 
-Before deploying, we need to configure each namespace with the model location and GCS permissions:
+**IMPORTANT**: These steps must be completed BEFORE creating a release, otherwise the pods will fail to start.
 
 ```bash
 # Create ConfigMap with model URI for staging
@@ -250,6 +250,27 @@ kubectl create configmap model-config \
   --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
   -n production \
   --dry-run=client -o yaml | kubectl apply -f -
+
+# Pre-create service accounts in both namespaces with Workload Identity annotation
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-serving-sa
+  namespace: staging
+  annotations:
+    iam.gke.io/gcp-service-account: model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-serving-sa
+  namespace: production
+  annotations:
+    iam.gke.io/gcp-service-account: model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com
+EOF
+
+echo "Namespaces configured with ConfigMap and ServiceAccount"
 ```
 
 ### Step 3.5: Create Initial Release
@@ -282,24 +303,22 @@ gcloud deploy rollouts list \
   --region=${REGION}
 ```
 
-### Step 4.2: Configure Workload Identity for Staging
-
-After the deployment creates the service account, annotate it for GCS access:
+### Step 4.2: Verify Staging Deployment
 
 ```bash
 # Get cluster credentials (if not already done)
 gcloud container clusters get-credentials mlops-cluster --region=${REGION}
 
-# Wait for deployment to create service account, then annotate it
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace staging \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
+# Check that pods are running
+kubectl get pods -n staging
 
-# Restart deployment to pick up identity
+# If pods show 0/1 Ready or CrashLoopBackOff, check logs
+kubectl logs -l app=model-serving -n staging
+
+# If needed, restart deployment to pick up ServiceAccount/ConfigMap
 kubectl rollout restart deployment model-serving -n staging
 
-# Wait for pods to be ready
+# Wait for pods to be ready (1/1 Running)
 kubectl get pods -n staging -w
 ```
 
@@ -346,19 +365,19 @@ gcloud deploy rollouts approve release-001-to-production-0001 \
   --region=${REGION}
 ```
 
-### Step 4.5: Configure Workload Identity for Production
+### Step 4.5: Verify Production Deployment
 
 ```bash
-# Annotate service account for GCS access
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace production \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
+# Check that pods are running
+kubectl get pods -n production
 
-# Restart deployment to pick up identity
+# If pods show 0/1 Ready or CrashLoopBackOff, check logs
+kubectl logs -l app=model-serving -n production
+
+# If needed, restart deployment to pick up ServiceAccount/ConfigMap
 kubectl rollout restart deployment model-serving -n production
 
-# Wait for pods to be ready
+# Wait for pods to be ready (1/1 Running)
 kubectl get pods -n production -w
 ```
 
@@ -459,6 +478,112 @@ This will delete:
 - Check Cloud Logging for detailed error messages
 - Review Vertex AI Pipeline logs in the console
 - Examine GKE workload events with `kubectl describe -n <namespace>`
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### Pods stuck at 0/1 Ready with "No model found" error
+
+**Symptom**: Pods are running but not ready, logs show "No model found"
+
+```bash
+kubectl logs -l app=model-serving -n staging
+# Shows: WARNING - No model found. Server will start without model.
+```
+
+**Solution**: The ConfigMap is missing or has wrong value:
+
+```bash
+# Check current ConfigMap
+kubectl get configmap model-config -n staging -o yaml
+
+# Fix: Create/update ConfigMap with correct model URI
+kubectl create configmap model-config \
+  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
+  -n staging \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Restart deployment
+kubectl rollout restart deployment model-serving -n staging
+```
+
+#### Pods fail with "Permission denied" or "403 Forbidden" GCS error
+
+**Symptom**: Pods crash with GCS permission errors
+
+**Solution**: Workload Identity is not configured correctly:
+
+```bash
+# 1. Verify GCP service account exists
+gcloud iam service-accounts list | grep model-serving-gsa
+
+# 2. If not, create it and grant permissions
+gcloud iam service-accounts create model-serving-gsa \
+  --display-name="Model Serving Service Account" 2>/dev/null || echo "Already exists"
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectViewer" --quiet
+
+# 3. Configure Workload Identity binding
+gcloud iam service-accounts add-iam-policy-binding \
+  model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="serviceAccount:${PROJECT_ID}.svc.id.goog[staging/model-serving-sa]" --quiet
+
+# 4. Annotate K8s service account
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace staging \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+# 5. Restart deployment
+kubectl rollout restart deployment model-serving -n staging
+```
+
+#### Vertex AI Pipeline fails at model_training step
+
+**Symptom**: Pipeline fails with "FileNotFoundError: data_artifact"
+
+**Solution**: This is a GCS FUSE sync timing issue. Re-run the pipeline:
+
+```bash
+# Re-compile and re-submit the pipeline
+python src/compile_pipeline.py
+python src/submit_pipeline.py
+```
+
+#### Cloud Shell session expired
+
+**Symptom**: `gcloud` commands fail with "no active account selected"
+
+**Solution**: Re-authenticate and re-set environment variables:
+
+```bash
+gcloud auth login
+export PROJECT_ID=$(gcloud config get-value project)
+export REGION=us-central1
+gcloud config set project ${PROJECT_ID}
+gcloud auth application-default login
+gcloud container clusters get-credentials mlops-cluster --region=${REGION}
+```
+
+#### LoadBalancer IP not assigned
+
+**Symptom**: Service shows `<pending>` for EXTERNAL-IP
+
+**Solution**: Wait a few minutes for GCP to provision the load balancer, or check quotas:
+
+```bash
+# Check service status
+kubectl get svc model-serving -n staging -w
+
+# If stuck, describe service for events
+kubectl describe svc model-serving -n staging
+```
 
 ---
 
