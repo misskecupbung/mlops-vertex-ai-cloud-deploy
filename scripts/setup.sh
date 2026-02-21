@@ -132,6 +132,34 @@ echo "Namespace created: production"
 kubectl label namespace staging environment=staging --overwrite
 kubectl label namespace production environment=production --overwrite
 
+# Setup Workload Identity for model serving
+echo ""
+echo -e "${GREEN}Setting up Workload Identity for model serving...${NC}"
+
+# Create GCP service account for model serving
+gcloud iam service-accounts create model-serving-gsa \
+  --display-name="Model Serving Service Account" 2>/dev/null || echo "Service account already exists"
+
+# Grant storage access to the service account
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectViewer" \
+  --condition=None --quiet
+
+# Configure Workload Identity binding for staging namespace
+gcloud iam service-accounts add-iam-policy-binding \
+  model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="serviceAccount:${PROJECT_ID}.svc.id.goog[staging/model-serving-sa]" --quiet
+
+# Configure Workload Identity binding for production namespace
+gcloud iam service-accounts add-iam-policy-binding \
+  model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="serviceAccount:${PROJECT_ID}.svc.id.goog[production/model-serving-sa]" --quiet
+
+echo "Workload Identity configured for model-serving-sa"
+
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}   Setup Completed Successfully!       ${NC}"

@@ -71,19 +71,21 @@ spec:
       terminationGracePeriodSeconds: 30
 ---
 # Service Account
+# NOTE: The annotation must match your project's service account
+# Format: model-serving-gsa@PROJECT_ID.iam.gserviceaccount.com
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: model-serving-sa
   annotations:
-    iam.gke.io/gcp-service-account: ""
+    iam.gke.io/gcp-service-account: "model-serving-gsa@PROJECT_ID.iam.gserviceaccount.com"
 ---
 # ConfigMap for model configuration
 # NOTE: Update model_uri with your actual bucket path after running the pipeline
-# Format: gs://${PROJECT_ID}-mlops-lab/models/model.joblib
+# Format: gs://${PROJECT_ID}-mlops-lab/models/iris-model
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: model-config
 data:
-  model_uri: "gs://PROJECT_ID-mlops-lab/models/model.joblib"
+  model_uri: "gs://PROJECT_ID-mlops-lab/models/iris-model"
