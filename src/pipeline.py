@@ -123,11 +123,16 @@ def model_evaluation(
 ) -> bool:
     """Evaluate the trained model."""
     import json
+    import os
     import joblib
     import numpy as np
     from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
     
-    print("Loading test data and model...")
+    print(f"Loading test data from: {data_artifact.path}")
+    print(f"Data file exists: {os.path.exists(data_artifact.path)}")
+    print(f"Loading model from: {model_artifact.path}")
+    print(f"Model file exists: {os.path.exists(model_artifact.path)}")
+    
     with open(data_artifact.path, 'r') as f:
         data = json.load(f)
     
@@ -167,9 +172,9 @@ def model_evaluation(
 @component(
     base_image="python:3.9",
     packages_to_install=[
-        "google-cloud-aiplatform==1.36.0",
+        "google-cloud-aiplatform>=1.38.0",
         "joblib==1.3.1",
-        "google-cloud-storage==2.10.0"
+        "google-cloud-storage>=2.10.0"
     ]
 )
 def model_upload(
