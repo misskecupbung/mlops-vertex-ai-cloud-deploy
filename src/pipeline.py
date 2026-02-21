@@ -11,7 +11,7 @@ from google.cloud import aiplatform
 # Component 1: Data Preparation
 @component(
     base_image="python:3.9",
-    packages_to_install=["scikit-learn==1.3.0", "pandas==2.0.3", "numpy<2.0.0"]
+    packages_to_install=["scikit-learn==1.3.0", "pandas==2.0.3", "numpy<2.0.0", "google-cloud-storage"]
 )
 def data_preparation(
     test_size: float,
@@ -44,29 +44,45 @@ def data_preparation(
         'target_names': list(iris.target_names)
     }
     
-    # Ensure parent directory exists (handle empty dirname)
-    artifact_dir = os.path.dirname(data_artifact.path)
-    if artifact_dir:
-        os.makedirs(artifact_dir, exist_ok=True)
+    # Prepare the data to save
+    data_to_save = {
+        'X_train': X_train.tolist(),
+        'X_test': X_test.tolist(),
+        'y_train': y_train.tolist(),
+        'y_test': y_test.tolist(),
+        'info': data_info
+    }
     
-    print(f"Saving data artifact to: {data_artifact.path}")
+    print(f"Artifact path: {data_artifact.path}")
+    print(f"Artifact URI: {data_artifact.uri}")
     
-    # Save to artifact
-    with open(data_artifact.path, 'w') as f:
-        json.dump({
-            'X_train': X_train.tolist(),
-            'X_test': X_test.tolist(),
-            'y_train': y_train.tolist(),
-            'y_test': y_test.tolist(),
-            'info': data_info
-        }, f)
-    
-    # Verify file was written
-    if os.path.exists(data_artifact.path):
-        print(f"Data artifact successfully saved to: {data_artifact.path}")
-        print(f"File size: {os.path.getsize(data_artifact.path)} bytes")
+    # Write to GCS using the storage client for reliability
+    if data_artifact.uri.startswith('gs://'):
+        from google.cloud import storage
+        
+        # Parse GCS URI
+        uri_parts = data_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        print(f"Writing to GCS: bucket={bucket_name}, path={blob_path}")
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(json.dumps(data_to_save), content_type='application/json')
+        
+        print(f"Data artifact uploaded to GCS: {data_artifact.uri}")
     else:
-        raise RuntimeError(f"Failed to save data artifact to: {data_artifact.path}")
+        # Fallback to local file system
+        artifact_dir = os.path.dirname(data_artifact.path)
+        if artifact_dir:
+            os.makedirs(artifact_dir, exist_ok=True)
+        
+        with open(data_artifact.path, 'w') as f:
+            json.dump(data_to_save, f)
+        
+        print(f"Data artifact saved locally: {data_artifact.path}")
     
     print(f"Data prepared: {data_info}")
 
@@ -74,7 +90,7 @@ def data_preparation(
 # Component 2: Model Training
 @component(
     base_image="python:3.9",
-    packages_to_install=["scikit-learn==1.3.0", "numpy<2.0.0", "joblib==1.3.1"]
+    packages_to_install=["scikit-learn==1.3.0", "numpy<2.0.0", "joblib==1.3.1", "google-cloud-storage"]
 )
 def model_training(
     data_artifact: Input[Artifact],
@@ -85,37 +101,35 @@ def model_training(
     """Train the Random Forest classifier."""
     import json
     import os
-    import time
+    import io
     import joblib
     import numpy as np
     from sklearn.ensemble import RandomForestClassifier
     
-    print(f"Loading training data from: {data_artifact.path}")
-    print(f"Data artifact URI: {data_artifact.uri}")
+    print(f"Loading training data from: {data_artifact.uri}")
     
-    # Wait a moment for GCS FUSE to sync (helps with eventual consistency)
-    time.sleep(2)
-    
-    # Check if file exists with retries
-    max_retries = 3
-    for attempt in range(max_retries):
-        if os.path.exists(data_artifact.path):
-            print(f"File found on attempt {attempt + 1}")
-            break
-        print(f"File not found, attempt {attempt + 1}/{max_retries}, waiting...")
-        time.sleep(5)
-    
-    if not os.path.exists(data_artifact.path):
-        # List directory contents for debugging
-        parent_dir = os.path.dirname(data_artifact.path)
-        if os.path.exists(parent_dir):
-            print(f"Contents of {parent_dir}: {os.listdir(parent_dir)}")
-        else:
-            print(f"Parent directory does not exist: {parent_dir}")
-        raise FileNotFoundError(f"Data artifact not found at: {data_artifact.path}")
-    
-    with open(data_artifact.path, 'r') as f:
-        data = json.load(f)
+    # Read from GCS using the storage client for reliability
+    if data_artifact.uri.startswith('gs://'):
+        from google.cloud import storage
+        
+        # Parse GCS URI
+        uri_parts = data_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        print(f"Reading from GCS: bucket={bucket_name}, path={blob_path}")
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        
+        content = blob.download_as_string()
+        data = json.loads(content)
+        print("Data loaded from GCS successfully")
+    else:
+        # Fallback to local file system
+        with open(data_artifact.path, 'r') as f:
+            data = json.load(f)
     
     X_train = np.array(data['X_train'])
     y_train = np.array(data['y_train'])
@@ -131,25 +145,50 @@ def model_training(
     )
     model.fit(X_train, y_train)
     
-    # Ensure parent directory exists
-    artifact_dir = os.path.dirname(model_artifact.path)
-    if artifact_dir:
-        os.makedirs(artifact_dir, exist_ok=True)
-    
-    # Save model
+    # Save model metadata
     model_artifact.metadata['framework'] = 'sklearn'
     model_artifact.metadata['model_type'] = 'RandomForestClassifier'
     model_artifact.metadata['n_estimators'] = n_estimators
     
-    joblib.dump(model, model_artifact.path)
-    print(f"Model saved to: {model_artifact.path}")
+    print(f"Model artifact URI: {model_artifact.uri}")
+    
+    # Save to GCS using the storage client
+    if model_artifact.uri.startswith('gs://'):
+        from google.cloud import storage
+        
+        # Serialize model to bytes
+        model_bytes = io.BytesIO()
+        joblib.dump(model, model_bytes)
+        model_bytes.seek(0)
+        
+        # Parse GCS URI
+        uri_parts = model_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        print(f"Saving model to GCS: bucket={bucket_name}, path={blob_path}")
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_file(model_bytes, content_type='application/octet-stream')
+        
+        print(f"Model uploaded to GCS: {model_artifact.uri}")
+    else:
+        # Fallback to local file system
+        artifact_dir = os.path.dirname(model_artifact.path)
+        if artifact_dir:
+            os.makedirs(artifact_dir, exist_ok=True)
+        joblib.dump(model, model_artifact.path)
+        print(f"Model saved locally: {model_artifact.path}")
+    
     print("Model training completed!")
 
 
 # Component 3: Model Evaluation
 @component(
     base_image="python:3.9",
-    packages_to_install=["scikit-learn==1.3.0", "numpy<2.0.0", "joblib==1.3.1"]
+    packages_to_install=["scikit-learn==1.3.0", "numpy<2.0.0", "joblib==1.3.1", "google-cloud-storage"]
 )
 def model_evaluation(
     data_artifact: Input[Artifact],
@@ -159,23 +198,51 @@ def model_evaluation(
 ) -> bool:
     """Evaluate the trained model."""
     import json
-    import os
+    import io
     import joblib
     import numpy as np
     from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
     
-    print(f"Loading test data from: {data_artifact.path}")
-    print(f"Data file exists: {os.path.exists(data_artifact.path)}")
-    print(f"Loading model from: {model_artifact.path}")
-    print(f"Model file exists: {os.path.exists(model_artifact.path)}")
+    print(f"Loading test data from: {data_artifact.uri}")
+    print(f"Loading model from: {model_artifact.uri}")
     
-    with open(data_artifact.path, 'r') as f:
-        data = json.load(f)
+    # Load data from GCS
+    if data_artifact.uri.startswith('gs://'):
+        from google.cloud import storage
+        
+        uri_parts = data_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        content = blob.download_as_string()
+        data = json.loads(content)
+        print("Data loaded from GCS")
+    else:
+        with open(data_artifact.path, 'r') as f:
+            data = json.load(f)
     
     X_test = np.array(data['X_test'])
     y_test = np.array(data['y_test'])
     
-    model = joblib.load(model_artifact.path)
+    # Load model from GCS
+    if model_artifact.uri.startswith('gs://'):
+        from google.cloud import storage
+        
+        uri_parts = model_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        model_bytes = io.BytesIO(blob.download_as_bytes())
+        model = joblib.load(model_bytes)
+        print("Model loaded from GCS")
+    else:
+        model = joblib.load(model_artifact.path)
     
     # Make predictions
     y_pred = model.predict(X_test)
@@ -226,6 +293,7 @@ def model_upload(
 ) -> str:
     """Upload the model to Vertex AI Model Registry."""
     import json
+    import io
     import joblib
     import pickle
     import os
@@ -240,10 +308,38 @@ def model_upload(
     # Initialize Vertex AI
     aiplatform.init(project=project_id, location=region)
     
-    # Load model and data info
-    model = joblib.load(model_artifact.path)
-    with open(data_artifact.path, 'r') as f:
-        data = json.load(f)
+    # Load model from GCS
+    print(f"Loading model from: {model_artifact.uri}")
+    if model_artifact.uri.startswith('gs://'):
+        uri_parts = model_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        model_bytes = io.BytesIO(blob.download_as_bytes())
+        model = joblib.load(model_bytes)
+        print("Model loaded from GCS")
+    else:
+        model = joblib.load(model_artifact.path)
+    
+    # Load data info from GCS
+    print(f"Loading data info from: {data_artifact.uri}")
+    if data_artifact.uri.startswith('gs://'):
+        uri_parts = data_artifact.uri.replace('gs://', '').split('/', 1)
+        bucket_name = uri_parts[0]
+        blob_path = uri_parts[1] if len(uri_parts) > 1 else ''
+        
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        content = blob.download_as_string()
+        data = json.loads(content)
+        print("Data info loaded from GCS")
+    else:
+        with open(data_artifact.path, 'r') as f:
+            data = json.load(f)
     
     # Create temporary directory for model artifacts
     artifact_dir = '/tmp/model_upload'
