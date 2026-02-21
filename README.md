@@ -224,9 +224,15 @@ Check the `k8s-manifests/` directory:
 ### Step 3.3: Create Cloud Deploy Pipeline
 
 ```bash
+# Get project number (needed for service account)
+export PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+
+# Substitute variables and render the config
+envsubst < clouddeploy.yaml > clouddeploy-rendered.yaml
+
 # Register the delivery pipeline
 gcloud deploy apply \
-  --file=clouddeploy.yaml \
+  --file=clouddeploy-rendered.yaml \
   --region=${REGION}
 ```
 
