@@ -11,7 +11,7 @@ from google.cloud import aiplatform
 # Component 1: Data Preparation
 @component(
     base_image="python:3.9",
-    packages_to_install=["scikit-learn==1.3.0", "pandas==2.0.3", "numpy==1.24.3"]
+    packages_to_install=["scikit-learn==1.3.0", "pandas==2.0.3", "numpy<2.0.0"]
 )
 def data_preparation(
     test_size: float,
@@ -64,7 +64,7 @@ def data_preparation(
 # Component 2: Model Training
 @component(
     base_image="python:3.9",
-    packages_to_install=["scikit-learn==1.3.0", "numpy==1.24.3", "joblib==1.3.1"]
+    packages_to_install=["scikit-learn==1.3.0", "numpy<2.0.0", "joblib==1.3.1"]
 )
 def model_training(
     data_artifact: Input[Artifact],
@@ -113,7 +113,7 @@ def model_training(
 # Component 3: Model Evaluation
 @component(
     base_image="python:3.9",
-    packages_to_install=["scikit-learn==1.3.0", "numpy==1.24.3", "joblib==1.3.1"]
+    packages_to_install=["scikit-learn==1.3.0", "numpy<2.0.0", "joblib==1.3.1"]
 )
 def model_evaluation(
     data_artifact: Input[Artifact],
@@ -175,7 +175,8 @@ def model_evaluation(
         "google-cloud-aiplatform>=1.38.0",
         "joblib==1.3.1",
         "google-cloud-storage>=2.10.0",
-        "scikit-learn==1.3.0"
+        "scikit-learn==1.3.0",
+        "numpy<2.0.0"
     ]
 )
 def model_upload(
