@@ -234,24 +234,36 @@ gcloud deploy apply \
   --region=${REGION}
 ```
 
-### Step 3.4: Prepare ConfigMaps for Model Deployment
+### Step 3.4: Prepare Namespaces for Model Deployment
 
-**IMPORTANT**: Create ConfigMaps with the model URI BEFORE creating a release.
+**IMPORTANT**: These resources must be created BEFORE creating a release, otherwise the pods will fail to start.
 
 ```bash
-# Create ConfigMap with model URI for staging
+# Create ConfigMap and ServiceAccount for STAGING namespace
 kubectl create configmap model-config \
   --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
   -n staging \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# Create ConfigMap with model URI for production
+kubectl create serviceaccount model-serving-sa -n staging --dry-run=client -o yaml | kubectl apply -f -
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace staging \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+# Create ConfigMap and ServiceAccount for PRODUCTION namespace
 kubectl create configmap model-config \
   --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
   -n production \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "ConfigMaps created in staging and production namespaces"
+kubectl create serviceaccount model-serving-sa -n production --dry-run=client -o yaml | kubectl apply -f -
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace production \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+echo "Namespaces configured with ConfigMap and ServiceAccount"
 ```
 
 ### Step 3.5: Create Initial Release
@@ -284,25 +296,17 @@ gcloud deploy rollouts list \
   --region=${REGION}
 ```
 
-### Step 4.2: Configure Workload Identity for Staging
-
-**IMPORTANT**: After Cloud Deploy creates the deployment, you must annotate the ServiceAccount for GCS access.
+### Step 4.2: Verify Staging Deployment
 
 ```bash
 # Get cluster credentials (if not already done)
 gcloud container clusters get-credentials mlops-cluster --region=${REGION}
 
-# Wait for deployment to be created (check pods exist)
+# Check that pods are running and ready (should show 1/1)
 kubectl get pods -n staging
 
-# Annotate ServiceAccount with Workload Identity
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace staging \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
-
-# Restart deployment to pick up the new identity
-kubectl rollout restart deployment model-serving -n staging
+# If pods are not ready, check logs
+kubectl logs -l app=model-serving -n staging
 
 # Wait for pods to be ready (1/1 Running)
 kubectl get pods -n staging -w
@@ -351,22 +355,14 @@ gcloud deploy rollouts approve release-001-to-production-0001 \
   --region=${REGION}
 ```
 
-### Step 4.5: Configure Workload Identity for Production
-
-**IMPORTANT**: After the production deployment is created, annotate the ServiceAccount for GCS access.
+### Step 4.5: Verify Production Deployment
 
 ```bash
-# Wait for deployment to be created (check pods exist)
+# Check that pods are running and ready (should show 1/1)
 kubectl get pods -n production
 
-# Annotate ServiceAccount with Workload Identity  
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace production \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
-
-# Restart deployment to pick up the new identity
-kubectl rollout restart deployment model-serving -n production
+# If pods are not ready, check logs
+kubectl logs -l app=model-serving -n production
 
 # Wait for pods to be ready (1/1 Running)
 kubectl get pods -n production -w
