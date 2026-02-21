@@ -162,7 +162,7 @@ def model_evaluation(
     print(f"Recall: {recall:.4f}")
     
     # Check if model meets threshold
-    passed = accuracy >= accuracy_threshold
+    passed = bool(accuracy >= accuracy_threshold)  # Convert numpy.bool_ to Python bool
     print(f"Accuracy threshold ({accuracy_threshold}): {'PASSED' if passed else 'FAILED'}")
     
     return passed
