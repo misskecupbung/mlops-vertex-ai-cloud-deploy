@@ -95,6 +95,7 @@ This script will:
 - Create a GCS bucket for artifacts
 - Set up Artifact Registry repository
 - Create a single GKE cluster with staging and production namespaces
+- Configure Workload Identity for GCS access from pods
 
 ---
 
@@ -236,7 +237,25 @@ gcloud deploy apply \
   --region=${REGION}
 ```
 
-### Step 3.4: Create Initial Release
+### Step 3.5: Prepare Namespaces for Model Deployment
+
+Before deploying, we need to configure each namespace with the model location and GCS permissions:
+
+```bash
+# Create ConfigMap with model URI for staging
+kubectl create configmap model-config \
+  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
+  -n staging \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Create ConfigMap with model URI for production
+kubectl create configmap model-config \
+  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
+  -n production \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+### Step 3.5: Create Initial Release
 
 ```bash
 # Create a release from the serving image
@@ -266,12 +285,30 @@ gcloud deploy rollouts list \
   --region=${REGION}
 ```
 
-### Step 4.2: Test Staging Endpoint
+### Step 4.2: Configure Workload Identity for Staging
+
+After the deployment creates the service account, annotate it for GCS access:
 
 ```bash
 # Get cluster credentials (if not already done)
 gcloud container clusters get-credentials mlops-cluster --region=${REGION}
 
+# Wait for deployment to create service account, then annotate it
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace staging \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+# Restart deployment to pick up identity
+kubectl rollout restart deployment model-serving -n staging
+
+# Wait for pods to be ready
+kubectl get pods -n staging -w
+```
+
+### Step 4.3: Test Staging Endpoint
+
+```bash
 # Get the staging service IP
 STAGING_IP=$(kubectl get svc model-serving -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
@@ -290,7 +327,7 @@ Expected response:
 }
 ```
 
-### Step 4.3: Promote to Production
+### Step 4.4: Promote to Production
 
 ```bash
 # Promote the release to production
@@ -300,7 +337,35 @@ gcloud deploy releases promote \
   --region=${REGION}
 ```
 
-### Step 4.4: Verify Production Deployment
+Production deployments require approval. When prompted, type `Y` to confirm.
+
+If the rollout shows `PENDING_APPROVAL`, approve it:
+
+```bash
+# Approve the production rollout
+gcloud deploy rollouts approve release-001-to-production-0001 \
+  --delivery-pipeline=mlops-model-pipeline \
+  --release=release-001 \
+  --region=${REGION}
+```
+
+### Step 4.5: Configure Workload Identity for Production
+
+```bash
+# Annotate service account for GCS access
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace production \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+# Restart deployment to pick up identity
+kubectl rollout restart deployment model-serving -n production
+
+# Wait for pods to be ready
+kubectl get pods -n production -w
+```
+
+### Step 4.6: Verify Production Deployment
 
 ```bash
 # Get production IP (same cluster, different namespace)
@@ -312,13 +377,13 @@ curl -X POST http://${PROD_IP}:8080/predict \
   -d '{"features": [6.7, 3.0, 5.2, 2.3]}'
 ```
 
-### Step 4.5: View Deployment in Console
+### Step 4.7: View Deployment in Console
 
 1. Go to [Cloud Deploy Console](https://console.cloud.google.com/deploy)
 2. Click on `mlops-model-pipeline`
 3. View the release progression through environments
 
-### Step 4.6: Compare Both Environments
+### Step 4.8: Compare Both Environments
 
 ```bash
 # View all deployments across namespaces

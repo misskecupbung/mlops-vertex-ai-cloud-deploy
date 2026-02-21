@@ -54,8 +54,12 @@ python src/submit_pipeline.py
 
 ### Cloud Deploy Commands
 ```bash
-# Apply delivery pipeline
-gcloud deploy apply --file=clouddeploy.yaml --region=${REGION}
+# Get project number (required for clouddeploy.yaml)
+export PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+
+# Render and apply delivery pipeline
+envsubst < clouddeploy.yaml > clouddeploy-rendered.yaml
+gcloud deploy apply --file=clouddeploy-rendered.yaml --region=${REGION}
 
 # Create release
 gcloud deploy releases create release-001 \
@@ -69,10 +73,45 @@ gcloud deploy releases promote \
   --delivery-pipeline=mlops-model-pipeline \
   --region=${REGION}
 
+# Approve production rollout (required for production)
+gcloud deploy rollouts approve release-001-to-production-0001 \
+  --delivery-pipeline=mlops-model-pipeline \
+  --release=release-001 \
+  --region=${REGION}
+
 # Check release status
 gcloud deploy releases describe release-001 \
   --delivery-pipeline=mlops-model-pipeline \
   --region=${REGION}
+```
+
+### ConfigMap and Workload Identity Setup
+```bash
+# Create ConfigMap with model URI (do this for each namespace)
+kubectl create configmap model-config \
+  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
+  -n staging \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create configmap model-config \
+  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
+  -n production \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Annotate service accounts for Workload Identity (after deployment creates them)
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace staging \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+kubectl annotate serviceaccount model-serving-sa \
+  --namespace production \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --overwrite
+
+# Restart deployments after annotation
+kubectl rollout restart deployment model-serving -n staging
+kubectl rollout restart deployment model-serving -n production
 ```
 
 ### Kubernetes Commands (Single Cluster with Namespaces)
@@ -223,6 +262,33 @@ kubectl get namespaces
 # Recreate namespace if needed
 kubectl create namespace staging
 kubectl create namespace production
+```
+
+### Pod Not Ready / Model Not Loading
+```bash
+# Check pod logs for errors
+kubectl logs -l app=model-serving -n staging --tail=50
+
+# Common issues:
+# 1. "No model found" - ConfigMap model_uri is empty or wrong
+kubectl get configmap model-config -n staging -o yaml
+
+# 2. "403 Forbidden" - Workload Identity not configured
+kubectl get serviceaccount model-serving-sa -n staging -o yaml
+# Should have annotation: iam.gke.io/gcp-service-account
+
+# 3. "FileNotFoundError: model.pkl" - Wrong model path
+# Verify model exists in GCS:
+gsutil ls -r gs://${PROJECT_ID}-mlops-lab/models/
+
+# Fix ConfigMap with correct path:
+kubectl create configmap model-config \
+  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
+  -n staging \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Restart deployment
+kubectl rollout restart deployment model-serving -n staging
 ```
 
 ## Cleanup
