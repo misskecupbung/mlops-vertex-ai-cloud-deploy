@@ -89,11 +89,13 @@ if gcloud container clusters describe mlops-cluster --region=${REGION} 2>/dev/nu
 else
     gcloud container clusters create mlops-cluster \
         --region=${REGION} \
-        --num-nodes=2 \
+        --num-nodes=1 \
         --machine-type=e2-medium \
+        --disk-type=pd-standard \
+        --disk-size=50GB \
         --enable-autoscaling \
         --min-nodes=1 \
-        --max-nodes=5 \
+        --max-nodes=3 \
         --workload-pool=${PROJECT_ID}.svc.id.goog
     echo "Cluster created: mlops-cluster"
 fi
