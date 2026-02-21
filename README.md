@@ -132,7 +132,7 @@ Open `src/serve.py` to understand the prediction API:
 # Build the training image
 gcloud builds submit \
   --tag ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:v1 \
-  --file Dockerfile.training .
+  --dockerfile Dockerfile.training .
 ```
 
 ### Step 1.4: Build Serving Container
@@ -141,7 +141,7 @@ gcloud builds submit \
 # Build the serving image
 gcloud builds submit \
   --tag ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:v1 \
-  --file Dockerfile.serving .
+  --dockerfile Dockerfile.serving .
 ```
 
 ---
