@@ -174,7 +174,8 @@ def model_evaluation(
     packages_to_install=[
         "google-cloud-aiplatform>=1.38.0",
         "joblib==1.3.1",
-        "google-cloud-storage>=2.10.0"
+        "google-cloud-storage>=2.10.0",
+        "scikit-learn==1.3.0"
     ]
 )
 def model_upload(
