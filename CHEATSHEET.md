@@ -35,6 +35,13 @@ gcloud builds submit --config=cloudbuild-serving.yaml --substitutions=_TAG=v2
 
 ### Pipeline Commands
 ```bash
+# Create virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
 # Compile pipeline
 python src/compile_pipeline.py
 

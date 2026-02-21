@@ -48,6 +48,7 @@ In this hands-on lab, you'll learn how to build an automated MLOps pipeline usin
 - Basic knowledge of Python and Docker
 - Familiarity with Kubernetes concepts
 - Google Cloud SDK installed locally
+- **Python 3.9 - 3.12** (recommended: use Cloud Shell which has Python pre-installed)
 
 ### Time Breakdown
 
@@ -163,6 +164,10 @@ Open `src/pipeline.py` to understand the pipeline components:
 ### Step 2.2: Compile the Pipeline
 
 ```bash
+# Create and activate virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install required packages
 pip install -r requirements.txt
 
