@@ -1,0 +1,17 @@
+# Cloud Build config for training image
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:${_TAG}'
+      - '-f'
+      - 'Dockerfile.training'
+      - '.'
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:${_TAG}'
+
+substitutions:
+  _REGION: us-central1
+  _TAG: v1

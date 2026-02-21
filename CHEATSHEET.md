@@ -23,12 +23,14 @@ cd mlops-vertex-ai-cloud-deploy
 ### Build Containers
 ```bash
 # Training container
-docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:v1 -f Dockerfile.training .
-docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:v1
+gcloud builds submit --config=cloudbuild-training.yaml
 
 # Serving container
-docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:v1 -f Dockerfile.serving .
-docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:v1
+gcloud builds submit --config=cloudbuild-serving.yaml
+
+# With custom tag
+gcloud builds submit --config=cloudbuild-training.yaml --substitutions=_TAG=v2
+gcloud builds submit --config=cloudbuild-serving.yaml --substitutions=_TAG=v2
 ```
 
 ### Pipeline Commands

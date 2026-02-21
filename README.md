@@ -130,16 +130,14 @@ Open `src/serve.py` to understand the prediction API:
 
 ```bash
 # Build the training image
-docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:v1 -f Dockerfile.training .
-docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/trainer:v1
+gcloud builds submit --config=cloudbuild-training.yaml
 ```
 
 ### Step 1.4: Build Serving Container
 
 ```bash
 # Build the serving image
-docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:v1 -f Dockerfile.serving .
-docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:v1
+gcloud builds submit --config=cloudbuild-serving.yaml
 ```
 
 ---
