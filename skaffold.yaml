@@ -24,10 +24,6 @@ profiles:
     deploy:
       kubectl:
         defaultNamespace: staging
-    patches:
-      - op: replace
-        path: /spec/replicas
-        value: 1
   - name: production
     manifests:
       rawYaml:
@@ -35,7 +31,3 @@ profiles:
     deploy:
       kubectl:
         defaultNamespace: production
-    patches:
-      - op: replace
-        path: /spec/replicas
-        value: 2
