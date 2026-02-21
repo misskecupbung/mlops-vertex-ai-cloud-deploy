@@ -20,6 +20,7 @@ def data_preparation(
 ):
     """Load and prepare the Iris dataset."""
     import json
+    import os
     import numpy as np
     from sklearn.datasets import load_iris
     from sklearn.model_selection import train_test_split
@@ -43,6 +44,9 @@ def data_preparation(
         'target_names': list(iris.target_names)
     }
     
+    # Ensure parent directory exists
+    os.makedirs(os.path.dirname(data_artifact.path), exist_ok=True)
+    
     # Save to artifact
     with open(data_artifact.path, 'w') as f:
         json.dump({
@@ -53,6 +57,7 @@ def data_preparation(
             'info': data_info
         }, f)
     
+    print(f"Data artifact saved to: {data_artifact.path}")
     print(f"Data prepared: {data_info}")
 
 
@@ -69,11 +74,14 @@ def model_training(
 ):
     """Train the Random Forest classifier."""
     import json
+    import os
     import joblib
     import numpy as np
     from sklearn.ensemble import RandomForestClassifier
     
-    print("Loading training data...")
+    print(f"Loading training data from: {data_artifact.path}")
+    print(f"File exists: {os.path.exists(data_artifact.path)}")
+    
     with open(data_artifact.path, 'r') as f:
         data = json.load(f)
     
@@ -89,12 +97,16 @@ def model_training(
     )
     model.fit(X_train, y_train)
     
+    # Ensure parent directory exists
+    os.makedirs(os.path.dirname(model_artifact.path), exist_ok=True)
+    
     # Save model
     model_artifact.metadata['framework'] = 'sklearn'
     model_artifact.metadata['model_type'] = 'RandomForestClassifier'
     model_artifact.metadata['n_estimators'] = n_estimators
     
     joblib.dump(model, model_artifact.path)
+    print(f"Model saved to: {model_artifact.path}")
     print("Model training completed!")
 
 

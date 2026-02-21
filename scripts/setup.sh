@@ -66,6 +66,22 @@ else
     echo "Bucket created: gs://${BUCKET_NAME}"
 fi
 
+# Grant bucket permissions to service accounts
+echo -e "${GREEN}[3.5/7] Granting bucket permissions...${NC}"
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+
+# Grant to default compute service account
+gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/storage.admin" --quiet 2>/dev/null || true
+
+# Grant to Vertex AI service agent
+gcloud storage buckets add-iam-policy-binding gs://${BUCKET_NAME} \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-aiplatform.iam.gserviceaccount.com" \
+  --role="roles/storage.admin" --quiet 2>/dev/null || true
+
+echo "Bucket permissions granted"
+
 # Create Artifact Registry repository
 echo -e "${GREEN}[4/7] Creating Artifact Registry repository...${NC}"
 if gcloud artifacts repositories describe mlops-lab --location=${REGION} 2>/dev/null; then
