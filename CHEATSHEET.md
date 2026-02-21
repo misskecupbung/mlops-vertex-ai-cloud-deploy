@@ -14,7 +14,7 @@ export BUCKET_NAME="${PROJECT_ID}-mlops-lab"
 
 # Clone the repository
 git clone https://github.com/misskecupbung/mlops-vertex-ai-cloud-deploy.git
-cd mlops-vertex-ai-cloud-deploy-lab
+cd mlops-vertex-ai-cloud-deploy
 
 # Run setup
 ./scripts/setup.sh
