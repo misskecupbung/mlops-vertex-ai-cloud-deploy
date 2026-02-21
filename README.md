@@ -67,10 +67,13 @@ In this hands-on lab, you'll learn how to build an automated MLOps pipeline usin
 ### Step 1: Set Environment Variables
 
 ```bash
-# Set your project ID
-export PROJECT_ID="your-project-id"
+# Set your project ID (auto-detect from gcloud config)
+export PROJECT_ID=$(gcloud config get-value project)
 export REGION="us-central1"
 export BUCKET_NAME="${PROJECT_ID}-mlops-lab"
+
+# Or set manually if needed:
+# export PROJECT_ID="your-project-id"
 
 # Set working directory
 cd mlops-vertex-ai-cloud-deploy-lab

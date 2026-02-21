@@ -14,11 +14,18 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}   MLOps Lab Setup Script              ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-# Check if PROJECT_ID is set
+# Check if PROJECT_ID is set, if not try to get from gcloud
 if [ -z "$PROJECT_ID" ]; then
-    echo -e "${RED}ERROR: PROJECT_ID environment variable is not set${NC}"
-    echo "Please run: export PROJECT_ID=your-project-id"
-    exit 1
+    echo -e "${YELLOW}PROJECT_ID not set, attempting to get from gcloud config...${NC}"
+    PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+    if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "(unset)" ]; then
+        echo -e "${RED}ERROR: PROJECT_ID could not be determined${NC}"
+        echo "Please run: export PROJECT_ID=your-project-id"
+        echo "Or set default project: gcloud config set project YOUR_PROJECT_ID"
+        exit 1
+    fi
+    export PROJECT_ID
+    echo -e "${GREEN}Using project: $PROJECT_ID${NC}"
 fi
 
 # Set default region if not set

@@ -4,10 +4,13 @@
 
 ### Environment Setup
 ```bash
-# Set environment variables
-export PROJECT_ID="your-project-id"
+# Set environment variables (auto-detect project ID)
+export PROJECT_ID=$(gcloud config get-value project)
 export REGION="us-central1"
 export BUCKET_NAME="${PROJECT_ID}-mlops-lab"
+
+# Or set manually if needed:
+# export PROJECT_ID="your-project-id"
 
 # Run setup
 ./scripts/setup.sh
