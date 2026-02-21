@@ -236,34 +236,27 @@ gcloud deploy apply \
 
 ### Step 3.4: Prepare Namespaces for Model Deployment
 
-**IMPORTANT**: These resources must be created BEFORE creating a release, otherwise the pods will fail to start.
+**IMPORTANT**: Run this script BEFORE creating a release. It creates ConfigMaps and ServiceAccounts with proper variable substitution.
 
 ```bash
-# Create ConfigMap and ServiceAccount for STAGING namespace
-kubectl create configmap model-config \
-  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
-  -n staging \
-  --dry-run=client -o yaml | kubectl apply -f -
+# Run the preparation script
+chmod +x scripts/prepare-namespaces.sh
+./scripts/prepare-namespaces.sh
+```
 
-kubectl create serviceaccount model-serving-sa -n staging --dry-run=client -o yaml | kubectl apply -f -
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace staging \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
+This script will:
+- Create ConfigMaps with the correct model URI (using actual PROJECT_ID)
+- Create ServiceAccounts with Workload Identity annotations
+- Validate that all values are correctly substituted
+- Show verification output
 
-# Create ConfigMap and ServiceAccount for PRODUCTION namespace
-kubectl create configmap model-config \
-  --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
-  -n production \
-  --dry-run=client -o yaml | kubectl apply -f -
+**Manual verification** (optional):
+```bash
+# Verify ConfigMap has correct value (should NOT show literal "PROJECT_ID")
+kubectl get configmap model-config -n staging -o jsonpath='{.data.model_uri}'
+# Expected: gs://YOUR-PROJECT-ID-mlops-lab/models/iris-classifier
 
-kubectl create serviceaccount model-serving-sa -n production --dry-run=client -o yaml | kubectl apply -f -
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace production \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
-
-echo "Namespaces configured with ConfigMap and ServiceAccount"
+kubectl get configmap model-config -n production -o jsonpath='{.data.model_uri}'
 ```
 
 ### Step 3.5: Create Initial Release
