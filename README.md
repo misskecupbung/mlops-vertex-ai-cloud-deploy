@@ -1,245 +1,144 @@
-# Automating MLOps Pipeline with Vertex AI and Cloud Deploy
+# MLOps Pipeline with Vertex AI and Cloud Deploy
 
-## Hands-On Lab (45 Minutes) | Beginner-Medium Level
+> **45 min hands-on lab** | Beginner-Intermediate
 
-### Lab Overview
+Build an automated MLOps pipeline that trains an ML model with Vertex AI, containerizes it, and deploys through staging → production on GKE using Cloud Deploy.
 
-In this hands-on lab, you'll learn how to build an automated MLOps pipeline using Google Cloud's Vertex AI and Cloud Deploy. You'll create a complete end-to-end workflow that trains a machine learning model, containerizes it, and deploys it through multiple environments (staging → production) using Kubernetes namespaces on a single GKE cluster.
+![architecture](img/architecture-mlops-vertex-ai-cloud-deploy-lab.png)
 
-### Architecture Diagram
+## What You'll Build
 
-![image](img/architecture-mlops-vertex-ai-cloud-deploy-lab.png)
+- Vertex AI training pipeline
+- Containerized ML model serving
+- Cloud Deploy delivery pipeline with staging/production namespaces
+- Automated deployments via Cloud Build
 
-### What You'll Learn
+## Prerequisites
 
-- ✅ Set up a Vertex AI training pipeline
-- ✅ Build and containerize ML models
-- ✅ Configure Cloud Deploy delivery pipelines
-- ✅ Automate deployments with Cloud Build
-- ✅ Implement progressive rollouts (staging → production) using namespaces
-- ✅ Monitor and manage ML model deployments
-
-### Prerequisites
-
-- Google Cloud Platform account with billing enabled
-- Basic knowledge of Python and Docker
-- Familiarity with Kubernetes concepts
-- Google Cloud SDK installed locally
-- **Python 3.9 - 3.12** (recommended: use Cloud Shell which has Python pre-installed)
-
-### Time Breakdown
-
-| Section | Duration | Description |
-|---------|----------|-------------|
-| Setup | 5 min | Environment and project setup |
-| Module 1 | 10 min | Create ML training code |
-| Module 2 | 10 min | Build Vertex AI Pipeline |
-| Module 3 | 10 min | Configure Cloud Deploy |
-| Module 4 | 8 min | Deploy and test |
-| Cleanup | 2 min | Resource cleanup |
+- GCP account with billing enabled
+- Basic Python, Docker, and Kubernetes knowledge
+- Google Cloud SDK installed (or use Cloud Shell)
+- Python 3.9-3.12
+- 
 
 ---
 
-## Initial Setup (5 minutes)
+## Setup (5 min)
 
-### Step 1: Set Environment Variables
+### 1. Set Environment Variables
 
 ```bash
-# Set your project ID (auto-detect from gcloud config)
 export PROJECT_ID=$(gcloud config get-value project)
 export REGION="us-central1"
 export BUCKET_NAME="${PROJECT_ID}-mlops-lab"
 
-# Or set manually if needed:
-# export PROJECT_ID="your-project-id"
-
-# Clone the repository
+# Clone and enter repo
 git clone https://github.com/misskecupbung/mlops-vertex-ai-cloud-deploy.git
-
-# Set working directory
 cd mlops-vertex-ai-cloud-deploy
 ```
 
-### Step 2: Run Setup Script
+### 2. Run Setup Script
 
 ```bash
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 ```
 
-This script will:
-- Enable required APIs
-- Create a GCS bucket for artifacts
-- Set up Artifact Registry repository
-- Create a single GKE cluster with staging and production namespaces
-- Configure Workload Identity for GCS access from pods
+This enables APIs, creates a GCS bucket, Artifact Registry, and a GKE cluster with staging/production namespaces.
 
 ---
 
-## Module 1: Create ML Training Code (10 minutes)
+## Module 1: ML Training Code (10 min)
 
-### Understanding the Model
+We're building an **Iris flower classifier** using scikit-learn.
 
-We'll create a simple **Iris Flower Classification** model using scikit-learn. This model predicts the species of iris flowers based on their measurements.
+### 1.1 Review the Code
 
-### Step 1.1: Review the Training Script
+- `src/train.py` - loads data, trains RandomForest, saves to GCS
+- `src/serve.py` - FastAPI server for predictions
 
-Open `src/train.py` to understand the training logic:
-
-```python
-# Key components:
-# 1. Load Iris dataset
-# 2. Train a Random Forest classifier
-# 3. Evaluate the model
-# 4. Save model artifacts to GCS
-```
-
-### Step 1.2: Review the Serving Code
-
-Open `src/serve.py` to understand the prediction API:
-
-```python
-# Key components:
-# 1. Load model from artifacts
-# 2. Expose REST API for predictions
-# 3. Health check endpoints
-```
-
-### Step 1.3: Build Training Container
+### 1.2 Build Containers
 
 ```bash
-# Build the training image
+# Training image
 gcloud builds submit --config=cloudbuild-training.yaml
-```
 
-### Step 1.4: Build Serving Container
-
-```bash
-# Build the serving image
+# Serving image
 gcloud builds submit --config=cloudbuild-serving.yaml
 ```
 
 ---
 
-## Module 2: Build Vertex AI Pipeline (10 minutes)
+## Module 2: Vertex AI Pipeline (10 min)
 
-### Understanding Vertex AI Pipelines
+Vertex AI Pipelines orchestrates ML workflows in a serverless manner.
 
-Vertex AI Pipelines help you automate, monitor, and govern your ML systems by orchestrating your ML workflow in a serverless manner.
+### 2.1 Review Pipeline
 
-### Step 2.1: Review Pipeline Definition
+See `src/pipeline.py` for the pipeline stages:
+1. `data_preparation` - load/split data
+2. `model_training` - train RandomForest
+3. `model_evaluation` - compute metrics
+4. `model_upload` - register to Model Registry
 
-Open `src/pipeline.py` to understand the pipeline components:
-
-```python
-# Pipeline stages:
-# 1. data_preparation - Load and validate data
-# 2. model_training - Train the ML model
-# 3. model_evaluation - Evaluate model metrics
-# 4. model_upload - Upload to Model Registry
-```
-
-### Step 2.2: Compile the Pipeline
+### 2.2 Compile and Submit
 
 ```bash
-# Create and activate virtual environment (recommended)
+# Setup Python env
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install required packages
+source venv/bin/activate
 pip install -r requirements.txt
 
-# Compile the pipeline
+# Compile
 python src/compile_pipeline.py
-```
 
-This generates `pipeline.json` - the compiled pipeline specification.
-
-### Step 2.3: Submit Pipeline to Vertex AI
-
-```bash
-# Run the pipeline submission script
+# Submit
 python src/submit_pipeline.py
 ```
 
-### Step 2.4: Monitor Pipeline Execution
+### 2.3 Monitor
 
-1. Go to [Vertex AI Pipelines Console](https://console.cloud.google.com/vertex-ai/pipelines)
-2. Select your project
-3. Click on the running pipeline to view progress
-4. Wait for the pipeline to complete (approximately 5 minutes)
+Go to [Vertex AI Pipelines Console](https://console.cloud.google.com/vertex-ai/pipelines) and watch the pipeline run (~5 min).
 
 ---
 
-## Module 3: Configure Cloud Deploy (10 minutes)
+## Module 3: Cloud Deploy (10 min)
 
-### Understanding Cloud Deploy
+Cloud Deploy manages progressive delivery to staging → production.
 
-Google Cloud Deploy is a managed, opinionated continuous delivery service that automates delivery of your applications to a series of target environments.
+### 3.1 Review Configs
 
-### Step 3.1: Review Cloud Deploy Configuration
+- `clouddeploy.yaml` - pipeline and targets
+- `k8s-manifests/` - deployment, service, HPA
 
-Open `clouddeploy.yaml`:
-
-```yaml
-# Key components:
-# - Delivery pipeline definition
-# - Target environments (staging, production) using namespaces
-# - Single GKE cluster with namespace isolation
-# - Promotion rules
-```
-
-### Step 3.2: Review Kubernetes Manifests
-
-Check the `k8s-manifests/` directory:
-- `deployment.yaml` - Model serving deployment
-- `service.yaml` - LoadBalancer service
-- `hpa.yaml` - Horizontal Pod Autoscaler
-
-### Step 3.3: Create Cloud Deploy Pipeline
+### 3.2 Create Pipeline
 
 ```bash
-# Get project number (needed for service account)
 export PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
-
-# Substitute variables and render the config
 envsubst < clouddeploy.yaml > clouddeploy-rendered.yaml
-
-# Register the delivery pipeline
-gcloud deploy apply \
-  --file=clouddeploy-rendered.yaml \
-  --region=${REGION}
+gcloud deploy apply --file=clouddeploy-rendered.yaml --region=${REGION}
 ```
 
-### Step 3.4: Prepare Namespaces for Model Deployment
+### 3.3 Prepare Namespaces
 
-**IMPORTANT**: Run this script BEFORE creating a release. It creates ConfigMaps and ServiceAccounts with proper variable substitution.
+**Run this before creating a release:**
 
 ```bash
-# Run the preparation script
 chmod +x scripts/prepare-namespaces.sh
 ./scripts/prepare-namespaces.sh
 ```
 
-This script will:
-- Create ConfigMaps with the correct model URI (using actual PROJECT_ID)
-- Create ServiceAccounts with Workload Identity annotations
-- Validate that all values are correctly substituted
-- Show verification output
+This creates ConfigMaps and ServiceAccounts with correct values.
 
-**Manual verification** (optional):
+Verify:
 ```bash
-# Verify ConfigMap has correct value (should NOT show literal "PROJECT_ID")
 kubectl get configmap model-config -n staging -o jsonpath='{.data.model_uri}'
-# Expected: gs://YOUR-PROJECT-ID-mlops-lab/models/iris-classifier
-
-kubectl get configmap model-config -n production -o jsonpath='{.data.model_uri}'
+# Should show: gs://YOUR-PROJECT-ID-mlops-lab/models/iris-classifier
 ```
 
-### Step 3.5: Create Initial Release
+### 3.4 Create Release
 
 ```bash
-# Create a release from the serving image
 gcloud deploy releases create release-001 \
   --project=${PROJECT_ID} \
   --region=${REGION} \
@@ -249,133 +148,82 @@ gcloud deploy releases create release-001 \
 
 ---
 
-## Module 4: Deploy and Test (8 minutes)
+## Module 4: Deploy & Test (8 min)
 
-### Step 4.1: Monitor Staging Deployment
+### 4.1 Monitor Staging
 
 ```bash
-# Check release status
 gcloud deploy releases describe release-001 \
-  --delivery-pipeline=mlops-model-pipeline \
-  --region=${REGION}
+  --delivery-pipeline=mlops-model-pipeline --region=${REGION}
 
-# List rollouts
 gcloud deploy rollouts list \
-  --delivery-pipeline=mlops-model-pipeline \
-  --release=release-001 \
-  --region=${REGION}
+  --delivery-pipeline=mlops-model-pipeline --release=release-001 --region=${REGION}
 ```
 
-### Step 4.2: Verify Staging Deployment
+### 4.2 Verify Staging Pods
 
 ```bash
-# Get cluster credentials (if not already done)
 gcloud container clusters get-credentials mlops-cluster --region=${REGION}
-
-# Check that pods are running and ready (should show 1/1)
 kubectl get pods -n staging
 
-# If pods are not ready, check logs
+# Check logs if needed
 kubectl logs -l app=model-serving -n staging
-
-# Wait for pods to be ready (1/1 Running)
-kubectl get pods -n staging -w
 ```
 
-### Step 4.3: Test Staging Endpoint
+### 4.3 Test Staging
 
 ```bash
-# Get the staging service IP
 STAGING_IP=$(kubectl get svc model-serving -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-# Test prediction endpoint
 curl -X POST http://${STAGING_IP}:8080/predict \
   -H "Content-Type: application/json" \
   -d '{"features": [5.1, 3.5, 1.4, 0.2]}'
 ```
 
-Expected response:
+Expected:
 ```json
-{
-  "prediction": "setosa",
-  "confidence": 0.95,
-  "model_version": "v1"
-}
+{"prediction": "setosa", "confidence": 0.95, "model_version": "v1"}
 ```
 
-### Step 4.4: Promote to Production
+### 4.4 Promote to Production
 
 ```bash
-# Promote the release to production
 gcloud deploy releases promote \
   --release=release-001 \
   --delivery-pipeline=mlops-model-pipeline \
   --region=${REGION}
 ```
 
-Production deployments require approval. When prompted, type `Y` to confirm.
-
-If the rollout shows `PENDING_APPROVAL`, approve it:
-
+Production requires approval. If prompted:
 ```bash
-# Approve the production rollout
 gcloud deploy rollouts approve release-001-to-production-0001 \
   --delivery-pipeline=mlops-model-pipeline \
-  --release=release-001 \
-  --region=${REGION}
+  --release=release-001 --region=${REGION}
 ```
 
-### Step 4.5: Verify Production Deployment
+### 4.5 Test Production
 
 ```bash
-# Check that pods are running and ready (should show 1/1)
 kubectl get pods -n production
 
-# If pods are not ready, check logs
-kubectl logs -l app=model-serving -n production
-
-# Wait for pods to be ready (1/1 Running)
-kubectl get pods -n production -w
-```
-
-### Step 4.6: Test Production Endpoint
-
-```bash
-# Get production IP (same cluster, different namespace)
 PROD_IP=$(kubectl get svc model-serving -n production -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-# Test production endpoint
 curl -X POST http://${PROD_IP}:8080/predict \
   -H "Content-Type: application/json" \
   -d '{"features": [6.7, 3.0, 5.2, 2.3]}'
 ```
 
-### Step 4.7: View Deployment in Console
+### 4.6 View in Console
 
-1. Go to [Cloud Deploy Console](https://console.cloud.google.com/deploy)
-2. Click on `mlops-model-pipeline`
-3. View the release progression through environments
-
-### Step 4.8: Compare Both Environments
-
-```bash
-# View all deployments across namespaces
-kubectl get deployments --all-namespaces | grep model-serving
-
-# View all services
-kubectl get svc --all-namespaces | grep model-serving
-```
+Go to [Cloud Deploy Console](https://console.cloud.google.com/deploy) → `mlops-model-pipeline` to see the release progression.
 
 ---
 
-## Bonus: Automated CI/CD with Cloud Build (Optional)
+## Bonus: CI/CD with Cloud Build
 
-### Set Up Continuous Deployment
-
-The `cloudbuild.yaml` file defines the complete CI/CD workflow:
+Set up a trigger to automate the full workflow on git push:
 
 ```bash
-# Create Cloud Build trigger
 gcloud builds triggers create github \
   --repo-name=your-repo \
   --repo-owner=your-github-username \
@@ -383,141 +231,76 @@ gcloud builds triggers create github \
   --build-config=cloudbuild.yaml
 ```
 
-Now, every push to `main` will:
-1. Build training and serving containers
-2. Run the Vertex AI pipeline
-3. Create a new Cloud Deploy release
-4. Automatically deploy to staging namespace
+Every push to `main` will build containers, run the pipeline, and deploy to staging.
 
 ---
 
-## Cleanup (2 minutes)
-
-### Remove All Resources
+## Cleanup
 
 ```bash
 chmod +x scripts/cleanup.sh
 ./scripts/cleanup.sh
 ```
 
-This will delete:
-- GKE cluster (with both namespaces)
-- Cloud Deploy pipelines and releases
-- Artifact Registry images
-- GCS buckets
-- Vertex AI pipeline runs
+Deletes: GKE cluster, Cloud Deploy resources, Artifact Registry, GCS bucket.
 
 ---
 
-## Additional Resources
+## Resources
 
-### Documentation
-- [Vertex AI Documentation](https://cloud.google.com/vertex-ai/docs)
-- [Cloud Deploy Documentation](https://cloud.google.com/deploy/docs)
-- [MLOps with Vertex AI](https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning)
-
-### Best Practices
-- Use separate service accounts for training and serving
-- Implement model versioning and A/B testing
-- Set up monitoring and alerting for model drift
-- Use network policies to isolate namespaces in production
-
-### Next Steps
-- Add model monitoring with Vertex AI Model Monitoring
-- Implement canary deployments
-- Add automated rollback on metric degradation
-- Integrate with Vertex AI Feature Store
-
----
-
-### Getting Help
-
-- Check Cloud Logging for detailed error messages
-- Review Vertex AI Pipeline logs in the console
-- Examine GKE workload events with `kubectl describe -n <namespace>`
+- [Vertex AI Docs](https://cloud.google.com/vertex-ai/docs)
+- [Cloud Deploy Docs](https://cloud.google.com/deploy/docs)
+- [MLOps Architecture](https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning)
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### Pods 0/1 Ready - "No model found"
 
-#### Pods stuck at 0/1 Ready with "No model found" error
-
-**Symptom**: Pods are running but not ready, logs show "No model found"
+ConfigMap is missing or wrong:
 
 ```bash
-kubectl logs -l app=model-serving -n staging
-# Shows: WARNING - No model found. Server will start without model.
-```
-
-**Solution**: The ConfigMap is missing or has wrong value:
-
-```bash
-# Check current ConfigMap
-kubectl get configmap model-config -n staging -o yaml
-
-# Fix: Create/update ConfigMap with correct model URI
 kubectl create configmap model-config \
   --from-literal=model_uri=gs://${PROJECT_ID}-mlops-lab/models/iris-classifier \
-  -n staging \
-  --dry-run=client -o yaml | kubectl apply -f -
+  -n staging --dry-run=client -o yaml | kubectl apply -f -
 
-# Restart deployment
 kubectl rollout restart deployment model-serving -n staging
 ```
 
-#### Pods fail with "Permission denied" or "403 Forbidden" GCS error
+### GCS Permission Denied (403)
 
-**Symptom**: Pods crash with GCS permission errors
-
-**Solution**: Workload Identity is not configured correctly:
+Workload Identity not configured:
 
 ```bash
-# 1. Verify GCP service account exists
-gcloud iam service-accounts list | grep model-serving-gsa
-
-# 2. If not, create it and grant permissions
-gcloud iam service-accounts create model-serving-gsa \
-  --display-name="Model Serving Service Account" 2>/dev/null || echo "Already exists"
+# Create and configure service account
+gcloud iam service-accounts create model-serving-gsa --display-name="Model Serving SA" 2>/dev/null || true
 
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/storage.objectViewer" --quiet
 
-# 3. Configure Workload Identity binding
 gcloud iam service-accounts add-iam-policy-binding \
   model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
   --role="roles/iam.workloadIdentityUser" \
   --member="serviceAccount:${PROJECT_ID}.svc.id.goog[staging/model-serving-sa]" --quiet
 
-# 4. Annotate K8s service account
-kubectl annotate serviceaccount model-serving-sa \
-  --namespace staging \
-  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com \
-  --overwrite
+kubectl annotate serviceaccount model-serving-sa -n staging \
+  iam.gke.io/gcp-service-account=model-serving-gsa@${PROJECT_ID}.iam.gserviceaccount.com --overwrite
 
-# 5. Restart deployment
 kubectl rollout restart deployment model-serving -n staging
 ```
 
-#### Vertex AI Pipeline fails at model_training step
+### Pipeline Fails at model_training
 
-**Symptom**: Pipeline fails with "FileNotFoundError: data_artifact"
-
-**Solution**: This is a GCS FUSE sync timing issue. Re-run the pipeline:
+GCS timing issue. Re-run:
 
 ```bash
-# Re-compile and re-submit the pipeline
 python src/compile_pipeline.py
 python src/submit_pipeline.py
 ```
 
-#### Cloud Shell session expired
-
-**Symptom**: `gcloud` commands fail with "no active account selected"
-
-**Solution**: Re-authenticate and re-set environment variables:
+### Cloud Shell Session Expired
 
 ```bash
 gcloud auth login
@@ -528,20 +311,10 @@ gcloud auth application-default login
 gcloud container clusters get-credentials mlops-cluster --region=${REGION}
 ```
 
-#### LoadBalancer IP not assigned
+### LoadBalancer IP Pending
 
-**Symptom**: Service shows `<pending>` for EXTERNAL-IP
-
-**Solution**: Wait a few minutes for GCP to provision the load balancer, or check quotas:
+Wait a few minutes for GCP to provision:
 
 ```bash
-# Check service status
 kubectl get svc model-serving -n staging -w
-
-# If stuck, describe service for events
-kubectl describe svc model-serving -n staging
 ```
-
----
-
-*Lab created for educational purposes. Estimated cloud costs: ~$3-5 for the full lab (reduced with single cluster).*
