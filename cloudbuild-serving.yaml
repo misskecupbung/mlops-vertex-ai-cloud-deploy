@@ -1,13 +1,8 @@
-# Cloud Build config for serving image
+# Build serving image
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:${_TAG}'
-      - '-f'
-      - 'Dockerfile.serving'
-      - '.'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:${_TAG}',
+           '-f', 'Dockerfile.serving', '.']
 
 images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/mlops-lab/serving:${_TAG}'

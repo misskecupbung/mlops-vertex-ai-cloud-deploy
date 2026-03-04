@@ -1,6 +1,4 @@
-"""
-Unit tests for the training script
-"""
+"""Tests for training module."""
 
 import json
 import os
@@ -12,10 +10,9 @@ from sklearn.datasets import load_iris
 
 
 class TestTrainingFunctions:
-    """Test cases for ML training functions."""
+    """Training function tests."""
     
     def test_load_data(self):
-        """Test data loading."""
         from train import load_data
         
         X, y, feature_names, target_names = load_data()
@@ -26,7 +23,6 @@ class TestTrainingFunctions:
         assert len(target_names) == 3
     
     def test_train_model(self):
-        """Test model training."""
         from train import train_model
         
         iris = load_iris()
@@ -39,13 +35,10 @@ class TestTrainingFunctions:
         assert hasattr(model, 'predict_proba')
     
     def test_evaluate_model(self):
-        """Test model evaluation."""
         from train import train_model, evaluate_model
         
         iris = load_iris()
         X, y = iris.data, iris.target
-        
-        # Split manually
         X_train, X_test = X[:120], X[120:]
         y_train, y_test = y[:120], y[120:]
         
@@ -60,7 +53,6 @@ class TestTrainingFunctions:
         assert metrics['test_accuracy'] > 0.8
     
     def test_save_model_locally(self):
-        """Test local model saving."""
         from train import train_model, save_model_locally
         
         iris = load_iris()
@@ -72,45 +64,34 @@ class TestTrainingFunctions:
                 model, metrics, iris.target_names, tmpdir
             )
             
-            # Check files exist
             assert os.path.exists(model_path)
             assert os.path.exists(metrics_path)
             assert os.path.exists(labels_path)
             
-            # Check model can be loaded
             with open(model_path, 'rb') as f:
                 loaded_model = pickle.load(f)
-            
             assert loaded_model is not None
             
-            # Check metrics
             with open(metrics_path, 'r') as f:
                 loaded_metrics = json.load(f)
-            
             assert loaded_metrics['accuracy'] == 0.95
 
 
 class TestModelPredictions:
-    """Test model prediction quality."""
+    """Prediction sanity checks."""
     
     def test_model_predictions(self):
-        """Test that model makes reasonable predictions."""
         from train import train_model
         
         iris = load_iris()
         model = train_model(iris.data, iris.target, n_estimators=50)
         
-        # Test known examples
-        setosa_example = np.array([[5.1, 3.5, 1.4, 0.2]])
-        virginica_example = np.array([[6.7, 3.0, 5.2, 2.3]])
+        # known examples
+        setosa = np.array([[5.1, 3.5, 1.4, 0.2]])
+        virginica = np.array([[6.7, 3.0, 5.2, 2.3]])
         
-        setosa_pred = model.predict(setosa_example)[0]
-        virginica_pred = model.predict(virginica_example)[0]
-        
-        # Setosa should be class 0
-        assert setosa_pred == 0
-        # Virginica should be class 2
-        assert virginica_pred == 2
+        assert model.predict(setosa)[0] == 0  # setosa
+        assert model.predict(virginica)[0] == 2  # virginica
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-# Horizontal Pod Autoscaler for Model Serving
+# HPA for model-serving
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

@@ -1,5 +1,4 @@
-# Pod Disruption Budget for Model Serving
-# Ensures high availability during node maintenance or updates
+# PDB for high availability
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

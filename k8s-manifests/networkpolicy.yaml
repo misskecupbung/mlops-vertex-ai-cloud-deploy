@@ -1,4 +1,4 @@
-# Network Policy for Model Serving
+# Network policy for model-serving pods
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -7,22 +7,19 @@ spec:
   podSelector:
     matchLabels:
       app: model-serving
-  policyTypes:
-    - Ingress
-    - Egress
+  policyTypes: [Ingress, Egress]
   ingress:
-    # Allow traffic from LoadBalancer
     - ports:
         - protocol: TCP
           port: 8080
   egress:
-    # Allow DNS resolution
+    # DNS
     - to:
         - namespaceSelector: {}
       ports:
         - protocol: UDP
           port: 53
-    # Allow HTTPS for GCS access
+    # HTTPS for GCS
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

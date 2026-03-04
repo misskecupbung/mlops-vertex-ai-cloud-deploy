@@ -1,28 +1,15 @@
-# Training Container Dockerfile
-# This image is used for model training in Vertex AI
-
+# Training image for Vertex AI
 FROM python:3.9-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    python3-dev \
+RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
 COPY requirements-training.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements-training.txt
 
-# Copy training script
 COPY src/train.py .
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1
-
-# Default command
 ENTRYPOINT ["python", "train.py"]

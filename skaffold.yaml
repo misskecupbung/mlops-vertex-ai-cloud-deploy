@@ -1,6 +1,4 @@
-# Skaffold Configuration for Cloud Deploy
-# Defines how to render Kubernetes manifests
-# Uses namespace-based deployment for staging and production
+# Skaffold config for Cloud Deploy
 
 apiVersion: skaffold/v4beta7
 kind: Config
